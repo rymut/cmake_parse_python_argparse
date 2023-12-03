@@ -172,6 +172,259 @@ foreach(_line IN LISTS _opt_args)
     endif()
 endforeach()
 
+
+#[=======================================================================[.rst:
+_argparse_sanatize_name
+~~~~~~~~~~~~~~~~~~~~~~~
+
+NAME - name to set
+ARGN - list of names
+returns first matching
+#]=======================================================================]
+function(_argparse_sanatize_name NAME)
+    foreach (_name IN ITEMS ${ARGN})
+        string(REGEX REPLACE "^[:_-]+" "" _name "${_name}")
+        string(REGEX REPLACE "[:_-]+$" "" _name "${_name}")
+        string(REGEX REPLACE "[^a-zA-Z0-9:_-]" "" _name "${_name}")
+        if (NOT _name STREQUAL "")
+            string(REGEX REPLACE "[:_-]" "_" _name "${_name}")
+            string(TOUPPER "${_name}" _name)
+            set(${NAME} "${_name}" PARENT_SCOPE)
+            return()
+        endif()
+    endforeach()
+    message(FATAL_ERROR "Not valid ARGN")
+endfunction()
+
+#[=======================================================================[.rst:
+_argparse
+~~~~~~~~~
+
+ARG
+METAVAR - value name (or upercase LONG )
+NARGS - numberic, ?, *, +
+CHOICES - list of CHOICE values
+REQUIRED - if string does not start with '[' literal
+parse INPUT
+
+choice or metavar - matches regex '[a-zA-Z0-9][a-zA-Z0-9_:-]*'
+optional value starts with `[` and ands with `]` literal 
+* value is `[metavar ...]`
++ value is `metavar [metavar ...]`
+? value is `[metavar]`
+numer value conains `metavar( metavar)*`
+chocies are `{choise(,choice)}`
+#]=======================================================================]
+function(_args_split INPUT SHORT LONG)
+    string(STRIP "${INPUT}" _input)
+    string(REGEX REPLACE ";" "\\\\;" _input "${_input}")
+
+    # logic the same
+    # -s VALUE, --long VALUE  comment
+    # | ||    | |           ^- args_end
+    # | ||    | ^- long_beg
+    # | ||    ^- sep_beg
+    # | |^- value_beg
+    # | ^- arg_end
+    # ^- arg_beg=0
+
+    # -s VALUE  comment
+    # | ||    ^- args_end
+    # | |^- value_beg
+    # | ^- arg_end
+    # ^- arg_beg=0
+    # sep_beg = -1, 
+    # long_beg = -1
+
+    # --long VALUE  comment
+    # |     ||    ^- args_len
+    # |     |^- value_beg
+    # |     ^- arg_end
+    # ^- long_beg = arg_beg = 0
+    # sep_beg = -1, 
+
+    string(FIND "${_input}" "  " _args_len)
+    string(SUBSTRING "${_input}" 0 ${_args_len} _args)
+    string(FIND "${_args}" ", " _arg0_end)
+    string(FIND "${_args}" "-" _arg0_beg)
+    set(_arg0_len ${_arg0_end})
+    if (_arg0_end EQUAL -1)
+        set(_arg1_beg 0)
+        set(_arg1_len 0)
+    else()
+        math(EXPR _arg1_beg "${_arg0_end} + 2")
+        math(EXPR _arg1_len "${_args_len} - ${_arg1_beg}")
+    endif()
+    set(_arg0 "")
+    if (_arg0_len GREATER 0) 
+        string(SUBSTRING "${_args}" ${_arg0_beg} ${_arg0_len} _arg0)
+    endif()
+    set(_arg1 "")
+    if (_arg1_len GREATER 0) 
+        string(SUBSTRING "${_args}" ${_arg1_beg} ${_arg1_len} _arg1)
+    endif()
+    string(FIND "${_args}" "--" _long_pos)
+    if (_long_pos EQUAL -1)
+        set(_long_text "")
+        set(_short_text "${_arg0}")
+    elseif(_long_pos EQUAL 0) 
+        set(_long_text "${_arg0}")
+        set(_short_text "${_arg1}")
+    else()
+        set(_long_text "${_arg1}")
+        set(_short_text "${_arg0}")
+    endif()
+    string(STRIP "${_long_text}" _long_text)
+    string(STRIP "${_short_text}" _short_text)
+    set(${SHORT} "${_short_text}" PARENT_SCOPE)
+    set(${LONG} "${_long_text}" PARENT_SCOPE)
+endfunction()
+
+function(_arg_parse INPUT PREFIX)
+    string(STRIP "${INPUT}" _arg)
+    string(FIND "${_arg}" " " _name_end)
+    string(FIND "${_arg}" "-" _name_beg)
+    string(LENGTH "${_arg}" _arg_len)
+    set(_value_beg 0)
+    set(_value_len 0)
+    if (_name_end EQUAL -1)
+        set(_name_end ${_arg_len})
+    else()
+        math(EXPR _value_beg "${_name_end} + 1")
+        if (_name_end GREATER_EQUAL _arg_len)
+            set(_value_beg 0)
+        else()
+            math(EXPR _value_len "${_arg_len} - ${_value_beg}")
+        endif()
+    endif()
+    set(_name_len 0)
+    if (_name_end GREATER _name_beg)
+        math(EXPR _name_len "${_name_end} - ${_name_beg}")
+    endif()
+    string(SUBSTRING "${_arg}" ${_name_beg} ${_name_len} _name)
+    string(SUBSTRING "${_arg}" ${_value_beg} ${_value_len} _value)
+    set(${PREFIX}_NAME "${_name}" PARENT_SCOPE)
+    set(${PREFIX}_VALUE "${_value}" PARENT_SCOPE)
+endfunction()
+
+# NARGS - numberic, ?, *, +
+# CHOICES - list of CHOICE values
+# REQUIRED - if string does not start with '[' literal
+#
+#[=======================================================================[.rst:
+_arg_value_parse
+~~~~~~~~~~~~~~~~
+
+.. code-block:: cmake
+
+  _arg_value_parse(<INPUT> <PREFIX>)
+
+sets
+``<PREFIX>_NAME`` - to "" if flag or choice value, not empty string for value and undefined for invalid
+``<PREFIX>_NARGS`` - type of arguments
+    - 0 - no arguments requrired (flag only) - empty string as input,
+    - <n> where n > 0 require n-arugments - storted as `VALUE VALUE` for 2 etc.,
+    - '?' none or one argument (argument not required) - stored as `[VALUE]`,
+    - '*' none or more arguments - sored as `[VALUE ...]`,
+    - '+' at least one or more arguments (required) - stored as `VALUE [VALUE ...]`
+``<PREFIX>_CHOICES`` - choices to select - "" if type can be any string list of arguments  
+    extracted from `{[a-z_]+(,[a-z]+)+}` regex with VALUE
+
+Required can be computed from ``<PREFIX>_NARGS``
+
+#]=======================================================================]
+function(_arg_value_parse INPUT PREFIX)
+    string(STRIP "${INPUT}" _input)
+    if (_input STREQUAL "")
+        # no value string - this is flag
+        set(_name "")
+        set(_nargs 0)
+        set(_choices "")
+    else()
+        string(FIND "${_input}" "{" _curly_bracket_beg)
+        string(FIND "${_input}" "}" _curly_bracket_end)
+        set(_values "${_input}")
+        if ((${_curly_bracket_beg} GREATER -1) AND (${_curly_bracket_end} GREATER -1))
+            math(EXPR _choices_beg "${_curly_bracket_beg} + 1")
+            math(EXPR _choices_len "${_curly_bracket_end} - ${_choices_beg}")
+            if (_choices_len LESS_EQUAL 0)
+                message(FATAL_ERROR "Invalid value wrong syntax { } positions in string `${_input}`")
+            endif()
+            string(SUBSTRING "${_input}" ${_choices_beg} ${_choices_len} _choices)
+            string(REPLACE "{${_choices}}" "CHOICES" _values "${_input}")
+        elseif(NOT (${_curly_bracket_beg} EQUAL -1 AND ${_curly_bracket_end} EQUAL -1))
+            message(FATAL_ERROR "Invalid value wrong syntax invalid { } in string `${_input}`")
+        endif()
+        string(REPLACE MATCH [[\s\s+]] " " _values "${_values}")
+        string(STRIP "${_values}" _values)
+        string(FIND "${_values}" "[" _first_squere_bracket_open_pos)
+        string(FIND "${_values}" "]" _first_squere_bracket_close_pos)
+        string(FIND "${_values}" " " _first_space_pos)
+
+        math(EXPR _value_beg "${_first_squere_bracket_open_pos} + 1")
+        if (_value_beg GREATER _first_space_pos AND _first_space_pos GREATER -1)
+            set(_value_beg 0)
+        endif()
+        string(LENGTH "${_values}" _value_end)
+        if (_first_squere_bracket_close_pos GREATER_EQUAL 0)
+            SET(_value_end ${_first_squere_bracket_close_pos})
+        endif()
+        if (_first_space_pos GREATER_EQUAL 0 AND _first_space_pos LESS _value_end)
+            set(_value_end ${_first_space_pos})
+        endif()
+        math(EXPR _value_len "${_value_end} - ${_value_beg}")
+        string(SUBSTRING "${_values}" ${_value_beg} ${_value_len} _name)
+    
+        string(REPLACE " " ";" _values_list "${_values}")
+        string(FIND "${_values}" "..." _dots_pos)
+        if (_dots_pos GREATER -1)
+            if ("${_values}" STREQUAL "[${_name} ...]")
+                set(_nargs "*")
+            elseif("${_values}" STREQUAL "${_name} [${_name} ...]")
+                set(_nargs "+")
+            endif()
+        else()
+            if ("${_values}" STREQUAL "[${_name}]")
+                set(_nargs "?")
+            elseif("${_values}" STREQUAL "${_name}")
+                set(_nargs 1)
+            else()
+                list(LENGTH _values_list _nargs)
+                list(REMOVE_ITEM _values_list "${_name}")
+                if (NOT "${_values_list}" STREQUAL "")
+                    message(FATAL_ERROR "invalid N element argument format")
+                endif()
+            endif()
+        endif()
+
+    endif()
+    if (NOT "${_choices}" STREQUAL "")
+        set(_name "")
+    endif()
+    string(TOUPPER "${_name}" _name)
+    message("input: '${_input}'")
+    message("\tname: '${_name}'; nargs: '${_nargs}'; choices: '${_choices}'")
+    set(${PREFIX}_NAME "${_name}" PARENT_SCOPE)
+    set(${PREFIX}_NARGS "${_nargs}" PARENT_SCOPE)
+    set(${PREFIX}_CHOICES "${_nargs}" PARENT_SCOPE)
+endfunction()
+_args_split("  --test VALUE, -t VALUE [VALUE ...]  ; testing ;" SHORT_RAW LONG_RAW)
+_arg_parse("${SHORT_RAW}" SHORT_RAW)
+
+message("VALUE STRING '${SHORT_RAW_VALUE}'")
+_arg_value_parse("" VAL)
+_arg_value_parse("VALUE" VAL)
+_arg_value_parse("VALUE VALUE" VAL)
+_arg_value_parse("[VALUE]" VAL)
+_arg_value_parse("[VALUE ...]" VAL)
+_arg_value_parse("VALUE [VALUE ...]" VAL)
+_arg_value_parse("" VAL)
+_arg_value_parse("{aa,bb}" VAL)
+_arg_value_parse("{aa,bb} {aa,bb}" VAL)
+_arg_value_parse("[{aa,bb}]" VAL)
+_arg_value_parse("[{aa,bb} ...]" VAL)
+_arg_value_parse("{aa,bb} [{aa,bb} ...]" VAL)
+
 #[=======================================================================[.rst:
 it uses argparse form python 
 it will ouotput it by 
