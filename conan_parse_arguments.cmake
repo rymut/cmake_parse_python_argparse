@@ -307,6 +307,39 @@ function(_arg_parse INPUT PREFIX)
     set(${PREFIX}_VALUE "${_value}" PARENT_SCOPE)
 endfunction()
 
+#[=======================================================================[.rst:
+_arg_value
+~~~~~~~~~~
+
+.. code-block:: cmake
+
+  _arg_value(<OUTPUT> <NARG> <NAME> <CHOCISES>)
+
+Set output to format of value of <NARG> type name and choices
+#]=======================================================================]
+function(_arg_value output narg name choices)
+    if (NOT "${choices}" STREQUAL "")
+        set(name "{${choices}}")
+    endif()
+    set(_value "")
+    if ("${narg}" STREQUAL "?")
+        set(_value "[${name}]")
+    elseif ("${narg}" STREQUAL "*")
+        set(_value "[${name} ...]")
+    elseif ("${narg}" STREQUAL "+")
+        set(_value "${name} [${name} ...]")
+    elseif ("${narg}" STREQUAL "1")
+        set(_value "${name}")
+    elseif ("${narg}" GREATER 1)
+        set(_value "${name}")
+        foreach(item RANGE 2 ${narg} 1)
+            set(_value "${_value} ${name}")
+        endforeach()
+    else()
+        set(_value "")
+    endif()
+    set(${output} "${_value}" PARENT_SCOPE)
+endfunction()
 
 #[=======================================================================[.rst:
 _arg_value_parse
@@ -415,16 +448,28 @@ function(_arg_value_parse INPUT PREFIX)
             endif()
         endif()
     endif()
+    # sanity checks
+    if ("${_narg}" STREQUAL "")
+        set(_name "")
+        set(_nargs "")
+        set(_choices "")
+    endif()
+    _arg_value(_target_values "${_narg}" "${_name}" "${_choices}")
+    if (NOT "${_target_values}" STREQUAL "${_input}")
+        set(_name "")
+        set(_nargs "")
+        set(_choices "")
+    endif()
     if (NOT "${_choices}" STREQUAL "")
         set(_name "")
         string(REGEX MATCH [[^[a-zA-Z_0-9]+(,[a-zA-Z_0-9]+)+$]] _choices_match "${_choices}")
-        message(STATUS "CHOCISES: ${_choices_match}")
         if (NOT _choices_match)
             set(_name "")
             set(_nargs "")
             set(_choices "")
         endif()
     endif()
+    # setting output
     string(TOUPPER "${_name}" _name)
     message(STATUS "${_input} = ${_name}: ${_narg} (${_choices})")
     set(${PREFIX}_NAME "${_name}" PARENT_SCOPE)
@@ -445,6 +490,7 @@ _arg_value_parse("VALUE [VALUE ...]" VAL)
 _arg_value_parse("" VAL)
 _arg_value_parse("{aa,bb}" VAL)
 _arg_value_parse("{aa,bb} {aa,bb}" VAL)
+_arg_value_parse("{aa,bb} {aa,bb} {aa,bb} {aa,bb} {aa,bb} {aa,bb}" VAL)
 _arg_value_parse("[{aa,bb}]" VAL)
 _arg_value_parse("[{aa,bb} ...]" VAL)
 _arg_value_parse("{aa,bb} [{aa,bb} ...]" VAL)
