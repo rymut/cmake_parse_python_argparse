@@ -307,10 +307,7 @@ function(_arg_parse INPUT PREFIX)
     set(${PREFIX}_VALUE "${_value}" PARENT_SCOPE)
 endfunction()
 
-# NARGS - numberic, ?, *, +
-# CHOICES - list of CHOICE values
-# REQUIRED - if string does not start with '[' literal
-#
+
 #[=======================================================================[.rst:
 _arg_value_parse
 ~~~~~~~~~~~~~~~~
@@ -319,11 +316,32 @@ _arg_value_parse
 
   _arg_value_parse(<INPUT> <PREFIX>)
 
-sets
-``<PREFIX>_NAME`` - to "" if flag or choice value, not empty string for value and undefined for invalid
-``<PREFIX>_NARGS`` - type of arguments
+Function used to split single option to its name, input formats:
+- `-<short> --<long> [value_format]`
+- `--<long> -<short> [value_format]`
+- `-<short> [value_format]`
+- `--<long> [value_format]`
+
+Where `<short> is short name argument, and `long` is long name argument.
+Values format is optional and should be written as an uppercase:
+- no value (narg=0) - flag
+- `[NAME]` - optional single or none value (narg=?)
+- `[NAME ...]` - optional single or many values (narg=*)
+- `NAME [NAME ...]` - required one or many values (narg=+)
+- `NAME NAME` - two required values (narg=2) and so on.
+
+Name of value can consists of any characters except `{}[] ;.`
+Special case is chooice values then `NAME` must match regex:
+``{[a-zA-Z_0-9]+(,[a-zA-Z_0-9]+)+}`` - name output will be "".
+
+``<PREFIX>_NAME`` - name of optional value
+    set to "" if argument is flag or choices option, 
+    not empty string for value
+``<PREFIX>_NARG`` - type of arguments
     - 0 - no arguments requrired (flag only) - empty string as input,
-    - <n> where n > 0 require n-arugments - storted as `VALUE VALUE` for 2 etc.,
+    - <n> - number or arguments required
+      where n > 0 require n-arugments, for example
+      storted as `VALUE VALUE` for 2 etc.,
     - '?' none or one argument (argument not required) - stored as `[VALUE]`,
     - '*' none or more arguments - sored as `[VALUE ...]`,
     - '+' at least one or more arguments (required) - stored as `VALUE [VALUE ...]`
@@ -338,7 +356,7 @@ function(_arg_value_parse INPUT PREFIX)
     if (_input STREQUAL "")
         # no value string - this is flag
         set(_name "")
-        set(_nargs 0)
+        set(_nargs "")
         set(_choices "")
     else()
         string(FIND "${_input}" "{" _curly_bracket_beg)
@@ -379,35 +397,41 @@ function(_arg_value_parse INPUT PREFIX)
         string(FIND "${_values}" "..." _dots_pos)
         if (_dots_pos GREATER -1)
             if ("${_values}" STREQUAL "[${_name} ...]")
-                set(_nargs "*")
+                set(_narg "*")
             elseif("${_values}" STREQUAL "${_name} [${_name} ...]")
-                set(_nargs "+")
+                set(_narg "+")
             endif()
         else()
             if ("${_values}" STREQUAL "[${_name}]")
-                set(_nargs "?")
+                set(_narg "?")
             elseif("${_values}" STREQUAL "${_name}")
-                set(_nargs 1)
+                set(_narg 1)
             else()
-                list(LENGTH _values_list _nargs)
+                list(LENGTH _values_list _narg)
                 list(REMOVE_ITEM _values_list "${_name}")
                 if (NOT "${_values_list}" STREQUAL "")
                     message(FATAL_ERROR "invalid N element argument format")
                 endif()
             endif()
         endif()
-
     endif()
     if (NOT "${_choices}" STREQUAL "")
         set(_name "")
+        string(REGEX MATCH [[^[a-zA-Z_0-9]+(,[a-zA-Z_0-9]+)+$]] _choices_match "${_choices}")
+        message(STATUS "CHOCISES: ${_choices_match}")
+        if (NOT _choices_match)
+            set(_name "")
+            set(_nargs "")
+            set(_choices "")
+        endif()
     endif()
     string(TOUPPER "${_name}" _name)
-    message("input: '${_input}'")
-    message("\tname: '${_name}'; nargs: '${_nargs}'; choices: '${_choices}'")
+    message(STATUS "${_input} = ${_name}: ${_narg} (${_choices})")
     set(${PREFIX}_NAME "${_name}" PARENT_SCOPE)
-    set(${PREFIX}_NARGS "${_nargs}" PARENT_SCOPE)
-    set(${PREFIX}_CHOICES "${_nargs}" PARENT_SCOPE)
+    set(${PREFIX}_NARG "${_narg}" PARENT_SCOPE)
+    set(${PREFIX}_CHOICES "${_choices}" PARENT_SCOPE)
 endfunction()
+
 _args_split("  --test VALUE, -t VALUE [VALUE ...]  ; testing ;" SHORT_RAW LONG_RAW)
 _arg_parse("${SHORT_RAW}" SHORT_RAW)
 
@@ -424,6 +448,7 @@ _arg_value_parse("{aa,bb} {aa,bb}" VAL)
 _arg_value_parse("[{aa,bb}]" VAL)
 _arg_value_parse("[{aa,bb} ...]" VAL)
 _arg_value_parse("{aa,bb} [{aa,bb} ...]" VAL)
+_arg_value_parse("{aaA,1 bb} [{aa,1bb} ...]" VAL)
 
 #[=======================================================================[.rst:
 it uses argparse form python 
