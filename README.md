@@ -4,10 +4,10 @@ Implementation of parser for Python argparse commands arguments, based on help m
 
 ## To do
 
-- [ ] Detect `positional arguments`
-- [ ] Detect `options` / `optional arguments`
-    - [ ] Match short name
-    - [ ] Match long name
+- [x] Detect `positional arguments`
+- [x] Detect `options` / `optional arguments`
+    - [x] Match short name
+    - [x] Match long name
 - [ ] Detect subcommands
 - [ ] Extract positional arguments
 - [ ] Extract optional
