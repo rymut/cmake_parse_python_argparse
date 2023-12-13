@@ -172,14 +172,17 @@ if (false)
 endif()
 
 #[=======================================================================[.rst:
-_argparse_sanatize_name
-~~~~~~~~~~~~~~~~~~~~~~~
+_arg_sanatize_name
+~~~~~~~~~~~~~~~~~~
 
-NAME - name to set
-ARGN - list of names
-returns first matching
+.. code-block:: cmake
+
+  _arg_sanatize_name(<OUTPUT> <INPUT> [<INPUT> ...])
+
+``<OUTPUT>`` - variable that will contain sanitized name
+``<INPUT>`` - input text
 #]=======================================================================]
-function(_argparse_sanatize_name NAME)
+function(_arg_sanatize_name NAME)
     foreach (_name IN ITEMS ${ARGN})
         string(REGEX REPLACE "^[:_-]+" "" _name "${_name}")
         string(REGEX REPLACE "[:_-]+$" "" _name "${_name}")
@@ -195,8 +198,18 @@ function(_argparse_sanatize_name NAME)
 endfunction()
 
 #[=======================================================================[.rst:
-_argparse
-~~~~~~~~~
+_arg_optional_arguments_split
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+.. code-block:: cmake
+
+  _arg_optional_arguments_split(<INPUT> <SHORT> <LONG> <ORDER>)
+
+``<INPUT>`` - string containing optional arguments line, can contain
+              comment
+``<SHORT>`` - variable name where short part with value will be stored
+``<LONG>`` - variable name where short part with value will be stored
+``<ORDER>`` - 0 if short argument is first, 1 if long argument is first
 
 ARG
 METAVAR - value name (or upercase LONG )
@@ -213,7 +226,7 @@ optional value starts with `[` and ands with `]` literal
 numer value conains `metavar( metavar)*`
 chocies are `{choise(,choice)}`
 #]=======================================================================]
-function(_args_split INPUT SHORT LONG)
+function(_arg_optional_arguments_split INPUT SHORT LONG ORDER)
     string(STRIP "${INPUT}" _input)
     string(REGEX REPLACE ";" "\\\\;" _input "${_input}")
 
@@ -265,20 +278,54 @@ function(_args_split INPUT SHORT LONG)
     if (_long_pos EQUAL -1)
         set(_long_text "")
         set(_short_text "${_arg0}")
+        set(_order 0)
+    elseif(_short_pos EQUAL -1)
+        set(_long_text "${_arg0}")
+        set(_short_text "")
+        set(_order 1)
     elseif(_long_pos EQUAL 0)
         set(_long_text "${_arg0}")
         set(_short_text "${_arg1}")
+        set(_order 1)
     else()
         set(_long_text "${_arg1}")
         set(_short_text "${_arg0}")
+        set(_order 0)
     endif()
     string(STRIP "${_long_text}" _long_text)
     string(STRIP "${_short_text}" _short_text)
     set(${SHORT} "${_short_text}" PARENT_SCOPE)
     set(${LONG} "${_long_text}" PARENT_SCOPE)
+    set(${ORDER} "${_order}" PARENT_SCOPE)
 endfunction()
 
-function(_arg_parse INPUT PREFIX)
+
+#[=======================================================================[.rst:
+_arg_optional_argument_split
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+.. code-block:: cmake
+
+  _arg_optional_argument_split(<INPUT> <PREFIX>)
+
+``<INPUT>`` - string containing argument with optional value to split
+
+ARG
+METAVAR - value name (or upercase LONG )
+NARGS - numberic, ?, *, +
+CHOICES - list of CHOICE values
+REQUIRED - if string does not start with '[' literal
+parse INPUT
+
+choice or metavar - matches regex '[a-zA-Z0-9][a-zA-Z0-9_:-]*'
+optional value starts with `[` and ands with `]` literal
+* value is `[metavar ...]`
++ value is `metavar [metavar ...]`
+? value is `[metavar]`
+numer value conains `metavar( metavar)*`
+chocies are `{choise(,choice)}`
+#]=======================================================================]
+function(_arg_optional_argument_split INPUT PREFIX)
     string(STRIP "${INPUT}" _arg)
     string(FIND "${_arg}" " " _name_end)
     string(FIND "${_arg}" "-" _name_beg)
@@ -612,10 +659,29 @@ function(_arg_get_command_output out cmd args)
 endfunction()
 
 
-_args_split("  --test VALUE, -t VALUE [VALUE ...]  ; testing ;" SHORT_RAW LONG_RAW)
-_arg_parse("${SHORT_RAW}" SHORT_RAW)
+#[=======================================================================[.rst:
+_arg_parse_usage
+~~~~~~~~~~~~~~~~~~~~~~
+
+.. code-block:: cmake
+
+  _arg_parse_usage(<PREFIX> <USAGE> <ARGS>)
+
+get command output:
+
+``<PREFIX>`` - where to store stdout stream
+``<USAGE>`` - command to find
+``args`` - argument to pass
+#]=======================================================================]
+function(_arg_parse_usage usage)
+endfunction()
+
+_arg_optional_arguments_split("  --test VALUE, -t VALUE [VALUE ...]  ; testing ;" SHORT_RAW LONG_RAW LONG_FIRST)
+_arg_optional_argument_split("${SHORT_RAW}" SHORT_RAW)
 
 message("VALUE STRING '${SHORT_RAW_VALUE}'")
+message("NAME STRING '${SHORT_RAW_NAME}'")
+message("LONG_FIRST '${LONG_FIRST}'")
 _arg_value_parse("" VAL)
 _arg_value_parse("VALUE" VAL)
 _arg_value_parse("VALUE VALUE" VAL)
@@ -648,21 +714,3 @@ foreach (line IN LISTS POS)
     message("POS: '${line}'")
 endforeach()
 message("")
-
-#[=======================================================================[.rst:
-it uses argparse form python
-it will ouotput it by
-```bash
-> python prog.py --help
-usage: prog.py [-h] echo
-
-positional arguments:
-  echo
-
-options:
-  -h, --help  show this help message and exit
-```
-
-find `positional arguments'
-
-#]=======================================================================]
