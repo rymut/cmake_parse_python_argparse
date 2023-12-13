@@ -2,6 +2,27 @@
 
 Implementation of parser for Python argparse commands arguments, based on help message.
 
+## Functions
+
+### Output functions
+
+- `_arg_get_command_output` - get command output
+- `_arg_output_split` - splits command line output to optional/positional/usage parts
+
+### Optional argument functions
+
+- `_arg_optional_arguments_split` - split argument to long and short argument
+- `_arg_optional_argument_split` - split long or short argument to name and value
+
+### Value functions
+
+- `_arg_value` - formats passed arguments to VALUE format string
+- `_arg_value_parse` - parse string value FORMAT
+
+### Helpers
+
+- `_arg_sanatize_name` convert name to suffix of variable
+
 ## To do
 
 - [x] Detect `positional arguments`
@@ -13,8 +34,9 @@ Implementation of parser for Python argparse commands arguments, based on help m
 - [ ] Extract optional
 - [ ] Prase input in style of `cmake_parse_arguments`
 - [ ] Parse usage to get number of arguments
+- [ ] In `ar
 
-# Format
+## Format
 
 Scrit can parse custom arguments parsers:
 
