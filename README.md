@@ -11,6 +11,7 @@ Implementation of parser for Python argparse commands arguments, based on help m
 
 ### Optional argument functions
 
+- `_arg_optional_parse` - parse list of arguments
 - `_arg_optional_arguments_split` - split argument to long and short argument
 - `_arg_optional_argument_split` - split long or short argument to name and value
 
@@ -30,11 +31,12 @@ Implementation of parser for Python argparse commands arguments, based on help m
     - [x] Match short name
     - [x] Match long name
 - [ ] Detect subcommands
-- [ ] Extract positional arguments
-- [ ] Extract optional
+- [x] Extract positional arguments
+- [x] Extract optional
 - [ ] Prase input in style of `cmake_parse_arguments`
 - [ ] Parse usage to get number of arguments
-- [ ] In `ar
+- [ ] Bug: Wrong detection of `-nr, --no-remote`
+- [ ] Name fallback should always choose long name (if present)
 
 ## Format
 

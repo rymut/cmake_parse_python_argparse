@@ -210,21 +210,6 @@ _arg_optional_arguments_split
 ``<SHORT>`` - variable name where short part with value will be stored
 ``<LONG>`` - variable name where short part with value will be stored
 ``<ORDER>`` - 0 if short argument is first, 1 if long argument is first
-
-ARG
-METAVAR - value name (or upercase LONG )
-NARGS - numberic, ?, *, +
-CHOICES - list of CHOICE values
-REQUIRED - if string does not start with '[' literal
-parse INPUT
-
-choice or metavar - matches regex '[a-zA-Z0-9][a-zA-Z0-9_:-]*'
-optional value starts with `[` and ands with `]` literal
-* value is `[metavar ...]`
-+ value is `metavar [metavar ...]`
-? value is `[metavar]`
-numer value conains `metavar( metavar)*`
-chocies are `{choise(,choice)}`
 #]=======================================================================]
 function(_arg_optional_arguments_split INPUT SHORT LONG ORDER)
     string(STRIP "${INPUT}" _input)
@@ -267,7 +252,7 @@ function(_arg_optional_arguments_split INPUT SHORT LONG ORDER)
         math(EXPR _arg1_len "${_args_len} - ${_arg1_beg}")
     endif()
     set(_arg0 "")
-    if (_arg0_len GREATER 0)
+    if (_arg0_end GREATER_EQUAL -1)
         string(SUBSTRING "${_args}" ${_arg0_beg} ${_arg0_len} _arg0)
     endif()
     set(_arg1 "")
@@ -306,26 +291,13 @@ _arg_optional_argument_split
 
 .. code-block:: cmake
 
-  _arg_optional_argument_split(<INPUT> <PREFIX>)
+  _arg_optional_argument_split(<INPUT> <NAME> <VALUE>)
 
 ``<INPUT>`` - string containing argument with optional value to split
-
-ARG
-METAVAR - value name (or upercase LONG )
-NARGS - numberic, ?, *, +
-CHOICES - list of CHOICE values
-REQUIRED - if string does not start with '[' literal
-parse INPUT
-
-choice or metavar - matches regex '[a-zA-Z0-9][a-zA-Z0-9_:-]*'
-optional value starts with `[` and ands with `]` literal
-* value is `[metavar ...]`
-+ value is `metavar [metavar ...]`
-? value is `[metavar]`
-numer value conains `metavar( metavar)*`
-chocies are `{choise(,choice)}`
+``<NAME>`` - string containing name of argument (--<name> or -<name>)
+``<VALUE>`` - string containing value of argument
 #]=======================================================================]
-function(_arg_optional_argument_split INPUT PREFIX)
+function(_arg_optional_argument_split INPUT NAME VALUE)
     string(STRIP "${INPUT}" _arg)
     string(FIND "${_arg}" " " _name_end)
     string(FIND "${_arg}" "-" _name_beg)
@@ -348,8 +320,87 @@ function(_arg_optional_argument_split INPUT PREFIX)
     endif()
     string(SUBSTRING "${_arg}" ${_name_beg} ${_name_len} _name)
     string(SUBSTRING "${_arg}" ${_value_beg} ${_value_len} _value)
-    set(${PREFIX}_NAME "${_name}" PARENT_SCOPE)
-    set(${PREFIX}_VALUE "${_value}" PARENT_SCOPE)
+    set(${NAME} "${_name}" PARENT_SCOPE)
+    set(${VALUE} "${_value}" PARENT_SCOPE)
+endfunction()
+
+#[=======================================================================[.rst:
+_arg_optional_parse
+~~~~~~~~~~~~~~~~~~~
+
+.. code-block:: cmake
+
+  _arg_optional_parse(<PREFIX> <OPTS>)
+
+``<PREFIX>`` - prefix used to set values
+``<OPTS>`` - List which each contains optional argument line
+
+Outputs:
+``<PREFIX>_NAME`` - Name of value
+``<PREFIX>_USAGE`` - part which will be used during usage help
+``<PREFIX>_SHORT`` - short part
+``<PREFIX>_LONG`` - long part
+``<PREFIX>_NARG`` - type of value
+``<PREFIX>_CHOICES`` - chocies comma separated
+#]=======================================================================]
+function(_arg_optional_parse prefix opts)
+    set(_name "")
+    set(_usage "")
+    set(_short "")
+    set(_long "")
+    set(_narg "")
+    set(_choices "")
+    foreach (_opt IN LISTS opts)
+        _arg_optional_arguments_split("${_opt}" _opt_short _opt_long _opt_order)
+        if ((NOT _opt_short) AND (NOT _opt_long))
+            message(FATAL_ERROR "invalid option '${_opt}' '${_opt_short}' '${_opt_long}'")
+        endif()
+        if (_opt_short)
+            _arg_optional_argument_split("${_opt_short}" _opt_short_name _opt_short_value)
+            string(SUBSTRING "${_opt_short_name}" 1 -1 _opt_name_fallback)
+        else()
+            set(_opt_short_name "")
+            set(_opt_short_value "")
+        endif()
+        if (_opt_long)
+            _arg_optional_argument_split("${_opt_long}" _opt_long_name _opt_long_value)
+            string(SUBSTRING "${_opt_long_name}" 2 -1 _opt_name_fallback)
+        else()
+            set(_opt_long_name "")
+            set(_opt_long_value "")
+        endif()
+        if ("${_opt_order}" EQUAL "0")
+            set(_opt_usage "${_opt_short}")
+            set(_opt_value "${_opt_short_value}")
+        else()
+            set(_opt_usage "${_opt_long}")
+            set(_opt_value "${_opt_long_value}")
+        endif()
+        _arg_value_parse("${_opt_value}" _opt_name _opt_narg _opt_choices)
+        if (NOT _opt_name)
+            _arg_sanatize_name(_opt_name "${_opt_name_fallback}")
+        endif()
+        set(_name "${_name};${_opt_name}")
+        set(_usage "${_usage};${_opt_usage}")
+        set(_short "${_short};${_opt_short}")
+        set(_long "${_long};${_opt_long}")
+        set(_narg "${_narg};${_opt_narg}")
+        set(_choices "${_choices};${_opt_choices}")
+    endforeach()
+    if (NOT "${_name}" STREQUAL "")
+        string(SUBSTRING "${_name}" 1 -1 _name)
+        string(SUBSTRING "${_usage}" 1 -1 _usage)
+        string(SUBSTRING "${_short}" 1 -1 _short)
+        string(SUBSTRING "${_long}" 1 -1 _long)
+        string(SUBSTRING "${_narg}" 1 -1 _narg)
+        string(SUBSTRING "${_choices}" 1 -1 _choices)
+    endif()
+    set("${prefix}_NAME" "${_name}" PARENT_SCOPE)
+    set("${prefix}_USAGE" "${_usage}" PARENT_SCOPE)
+    set("${prefix}_SHORT" "${_short}" PARENT_SCOPE)
+    set("${prefix}_LONG" "${_long}" PARENT_SCOPE)
+    set("${prefix}_NARG" "${_narg}" PARENT_SCOPE)
+    set("${prefix}_CHOICES" "${_choices}" PARENT_SCOPE)
 endfunction()
 
 #[=======================================================================[.rst:
@@ -503,7 +554,7 @@ _arg_value_parse
 
 .. code-block:: cmake
 
-  _arg_value_parse(<INPUT> <PREFIX>)
+  _arg_value_parse(<INPUT> <NAME> <NARG> <CHOICES>)
 
 Function used to split single option to its name, input formats:
 - `-<short> --<long> [value_format]`
@@ -523,10 +574,10 @@ Name of value can consists of any characters except `{}[] ;.`
 Special case is chooice values then `NAME` must match regex:
 ``{[a-zA-Z_0-9]+(,[a-zA-Z_0-9]+)+}`` - name output will be "".
 
-``<PREFIX>_NAME`` - name of optional value
+``<NAME>`` - name of optional value
     set to "" if argument is flag or choices option,
     not empty string for value
-``<PREFIX>_NARG`` - type of arguments
+``<NARG>`` - type of arguments
     - 0 - no arguments requrired (flag only) - empty string as input,
     - <n> - number or arguments required
       where n > 0 require n-arugments, for example
@@ -534,23 +585,24 @@ Special case is chooice values then `NAME` must match regex:
     - '?' none or one argument (argument not required) - stored as `[VALUE]`,
     - '*' none or more arguments - sored as `[VALUE ...]`,
     - '+' at least one or more arguments (required) - stored as `VALUE [VALUE ...]`
-``<PREFIX>_CHOICES`` - choices to select - "" if type can be any string list of arguments
+``<CHOICES>`` - choices to select - "" if type can be any string list of arguments
     extracted from `{[a-z_]+(,[a-z]+)+}` regex with VALUE
 
-Required can be computed from ``<PREFIX>_NARGS``
+Required can be computed from ``<NARGS>``
 
 #]=======================================================================]
-function(_arg_value_parse INPUT PREFIX)
+function(_arg_value_parse INPUT NAME NARG CHOICES)
     string(STRIP "${INPUT}" _input)
     if (_input STREQUAL "")
         # no value string - this is flag
         set(_name "")
-        set(_nargs "")
+        set(_narg "")
         set(_choices "")
     else()
         string(FIND "${_input}" "{" _curly_bracket_beg)
         string(FIND "${_input}" "}" _curly_bracket_end)
         set(_values "${_input}")
+        set(_choices "")
         if ((${_curly_bracket_beg} GREATER -1) AND (${_curly_bracket_end} GREATER -1))
             math(EXPR _choices_beg "${_curly_bracket_beg} + 1")
             math(EXPR _choices_len "${_curly_bracket_end} - ${_choices_beg}")
@@ -581,7 +633,7 @@ function(_arg_value_parse INPUT PREFIX)
         endif()
         math(EXPR _value_len "${_value_end} - ${_value_beg}")
         string(SUBSTRING "${_values}" ${_value_beg} ${_value_len} _name)
-
+        
         string(REPLACE " " ";" _values_list "${_values}")
         string(FIND "${_values}" "..." _dots_pos)
         if (_dots_pos GREATER -1)
@@ -625,12 +677,12 @@ function(_arg_value_parse INPUT PREFIX)
             set(_choices "")
         endif()
     endif()
+    
     # setting output
     string(TOUPPER "${_name}" _name)
-    message(STATUS "${_input} = ${_name}: ${_narg} (${_choices})")
-    set(${PREFIX}_NAME "${_name}" PARENT_SCOPE)
-    set(${PREFIX}_NARG "${_narg}" PARENT_SCOPE)
-    set(${PREFIX}_CHOICES "${_choices}" PARENT_SCOPE)
+    set(${NAME} "${_name}" PARENT_SCOPE)
+    set(${NARG} "${_narg}" PARENT_SCOPE)
+    set(${CHOICES} "${_choices}" PARENT_SCOPE)
 endfunction()
 
 #[=======================================================================[.rst:
@@ -677,25 +729,25 @@ function(_arg_parse_usage usage)
 endfunction()
 
 _arg_optional_arguments_split("  --test VALUE, -t VALUE [VALUE ...]  ; testing ;" SHORT_RAW LONG_RAW LONG_FIRST)
-_arg_optional_argument_split("${SHORT_RAW}" SHORT_RAW)
+_arg_optional_argument_split("${SHORT_RAW}" SHORT_RAW_NAME SHORT_RAW_VALUE)
 
 message("VALUE STRING '${SHORT_RAW_VALUE}'")
 message("NAME STRING '${SHORT_RAW_NAME}'")
 message("LONG_FIRST '${LONG_FIRST}'")
-_arg_value_parse("" VAL)
-_arg_value_parse("VALUE" VAL)
-_arg_value_parse("VALUE VALUE" VAL)
-_arg_value_parse("[VALUE]" VAL)
-_arg_value_parse("[VALUE ...]" VAL)
-_arg_value_parse("VALUE [VALUE ...]" VAL)
-_arg_value_parse("" VAL)
-_arg_value_parse("{aa,bb}" VAL)
-_arg_value_parse("{aa,bb} {aa,bb}" VAL)
-_arg_value_parse("{aa,bb} {aa,bb} {aa,bb} {aa,bb} {aa,bb} {aa,bb}" VAL)
-_arg_value_parse("[{aa,bb}]" VAL)
-_arg_value_parse("[{aa,bb} ...]" VAL)
-_arg_value_parse("{aa,bb} [{aa,bb} ...]" VAL)
-_arg_value_parse("{aaA,1 bb} [{aa,1bb} ...]" VAL)
+_arg_value_parse("" VAL_NAME VAL_NARG VAL_CHOICES)
+_arg_value_parse("VALUE" VAL_NAME VAL_NARG VAL_CHOICES)
+_arg_value_parse("VALUE VALUE" VAL_NAME VAL_NARG VAL_CHOICES)
+_arg_value_parse("[VALUE]" VAL_NAME VAL_NARG VAL_CHOICES)
+_arg_value_parse("[VALUE ...]" VAL_NAME VAL_NARG VAL_CHOICES)
+_arg_value_parse("VALUE [VALUE ...]" VAL_NAME VAL_NARG VAL_CHOICES)
+_arg_value_parse("" VAL_NAME VAL_NARG VAL_CHOICES)
+_arg_value_parse("{aa,bb}" VAL_NAME VAL_NARG VAL_CHOICES)
+_arg_value_parse("{aa,bb} {aa,bb}" VAL_NAME VAL_NARG VAL_CHOICES)
+_arg_value_parse("{aa,bb} {aa,bb} {aa,bb} {aa,bb} {aa,bb} {aa,bb}" VAL_NAME VAL_NARG VAL_CHOICES)
+_arg_value_parse("[{aa,bb}]" VAL_NAME VAL_NARG VAL_CHOICES)
+_arg_value_parse("[{aa,bb} ...]" VAL_NAME VAL_NARG VAL_CHOICES)
+_arg_value_parse("{aa,bb} [{aa,bb} ...]" VAL_NAME VAL_NARG VAL_CHOICES)
+_arg_value_parse("{aaA,1 bb} [{aa,1bb} ...]" VAL_NAME VAL_NARG VAL_CHOICES)
 
 set(cmd_name "conan")
 set(cmd_args "install")
@@ -714,3 +766,18 @@ foreach (line IN LISTS POS)
     message("POS: '${line}'")
 endforeach()
 message("")
+
+_arg_optional_parse(RES "${OPT}")
+
+list(LENGTH RES_NAME _len)
+if (${_len} GREATER 0)
+    math(EXPR _len "${_len}-1")
+    foreach (_idx RANGE 0 ${_len})
+        list(GET RES_NAME ${_idx} _name)
+        list(GET RES_LONG ${_idx} _long)
+        list(GET RES_SHORT ${_idx} _short)
+        list(GET RES_USAGE ${_idx} _usage)
+        message("OPT ${_idx}: '${_name}' long: '${_long}' short: '${_short}' usage: '${_usage}'")
+    endforeach()
+endif()
+
