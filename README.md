@@ -35,8 +35,8 @@ Implementation of parser for Python argparse commands arguments, based on help m
 - [x] Extract optional
 - [ ] Prase input in style of `cmake_parse_arguments`
 - [ ] Parse usage to get number of arguments
-- [ ] Bug: Wrong detection of `-nr, --no-remote`
-- [ ] Name fallback should always choose long name (if present)
+- [x] Bug: Wrong detection of `-nr, --no-remote`
+- [x] Name fallback should always choose long name (if present)
 
 ## Format
 
