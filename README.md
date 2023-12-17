@@ -37,6 +37,7 @@ Implementation of parser for Python argparse commands arguments, based on help m
 - [ ] Parse usage to get number of arguments
 - [x] Bug: Wrong detection of `-nr, --no-remote`
 - [x] Name fallback should always choose long name (if present)
+- [ ] Set narg when optional value is flag
 
 ## Format
 
