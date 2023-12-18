@@ -424,7 +424,7 @@ Special case is chooice values then `NAME` must match regex:
     set to "" if argument is flag or choices option,
     not empty string for value
 ``<NARG>`` - type of arguments
-    - 0 - no arguments requrired (flag only) - empty string as input,
+    - 0 - no arguments required (flag only) - empty string as input,
     - <n> - number or arguments required
       where n > 0 require n-arugments, for example
       storted as `VALUE VALUE` for 2 etc.,
@@ -442,7 +442,7 @@ function(_arg_value_parse text name_out narg_out choices_out)
   if(input STREQUAL "")
     # no value string - this is flag
     set(name "")
-    set(narg "")
+    set(narg "0")
     set(choices "")
   else()
     string(FIND "${input}" "{" curly_bracket_beg)
