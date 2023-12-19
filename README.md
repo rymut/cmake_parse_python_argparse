@@ -4,6 +4,10 @@ Implementation of parser for Python argparse commands arguments, based on help m
 
 ## Functions
 
+### Input functions
+
+- `_arg_prase` - parse input arguments
+
 ### Output functions
 
 - `_arg_get_command_output` - get command output

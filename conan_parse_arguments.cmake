@@ -549,24 +549,39 @@ _arg_get_command_output
 
 .. code-block:: cmake
 
-  _arg_get_command_output(<OUTPUT> <COMMAND> <ARGS>)
+  _arg_get_command_output(<OUTPUT> <COMMAND> <OPTION> [<HELP> ...])
 
 get command output:
 
 ``<OUTPUT>`` - where to store stdout stream
 ``<COMMAND>`` - command to find
-``args`` - argument to pass
+``<OPTION>`` - option to set to command
+``<HELP>`` - help flag by default equal `-h`
+
+Output will result stdout for command, or empty string if command
+is not found, or result code is different than 0
 #]=======================================================================]
-function(_arg_get_command_output out cmd args)
-  find_program(_cmd "${cmd}" REQUIRED NO_CACHE)
-  execute_process(
-    COMMAND ${cmd} ${args} -h
-    RESULT_VARIABLE _result
-    OUTPUT_VARIABLE _output
-    ERROR_VARIABLE _error ECHO_ERROR_VARIABLE # show the text output regardless
-    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
-  set("${out}"
-      "${_output}"
+function(_arg_get_command_output output_var command_name command_option)
+  find_program(command_filepath "${command_name}" REQUIRED NO_CACHE)
+  set(command_help "${ARGN}")
+  if("${command_help}" STREQUAL "")
+    set(command_help "-h")
+  endif()
+  set(command_output "")
+  if(command_filepath)
+    execute_process(
+      COMMAND ${command_filepath} ${command_option} ${command_help}
+      RESULT_VARIABLE command_result
+      OUTPUT_VARIABLE command_output
+      ERROR_VARIABLE command_error ECHO_ERROR_VARIABLE # show the text output
+                                                       # regardless
+      WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+    if(NOT ${command_result} EQUAL 0)
+      set(command_output "")
+    endif()
+  endif()
+  set("${output_var}"
+      "${command_output}"
       PARENT_SCOPE)
 endfunction()
 
@@ -585,5 +600,30 @@ get command output:
 ``args`` - argument to pass
 #]=======================================================================]
 function(_arg_parse_usage usage)
+
+endfunction()
+
+#[=======================================================================[.rst:
+_arg_parse
+~~~~~~~~~~
+
+.. code-block:: cmake
+
+  _arg_parse(<PREFIX> <COMMAND> <ARGS> <USED> <INPUT>)
+
+get command output:
+
+``<PREFIX>`` - where to store stdout stream
+``<COMMAND>`` - command to find
+``<ARGS>`` - argument to pass
+``<INPUT>`` - input
+#]=======================================================================]
+function(_arg_parse prefix command_name command_args used input)
+  # get parse values
+  _arg_get_command_output(command_output "${command_name}" "${command_args}")
+  _arg_output_split(command_usage command_positional command_optional
+                    "${command_output}" "${command_name}" "${command_args}")
+  # prase arguments
+  _arg_optional_parse(opts "${command_optional}")
 
 endfunction()
