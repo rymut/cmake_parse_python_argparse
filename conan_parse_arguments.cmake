@@ -603,13 +603,151 @@ function(_arg_parse_usage usage)
 
 endfunction()
 
+function(sort_by_length out_var idx_var short long)
+  set(out "")
+  set(idx "")
+  set(max_len "0")
+  list(LENGTH short short_count)
+  list(LENGTH long long_count)
+  if(NOT ${short_count} EQUAL ${long_count})
+    message(FATAL_ERROR "list must have the same number of elements")
+  endif()
+  if(${short_count} EQUAL 0)
+    set(${out_var}
+        ""
+        PARENT_SCOPE)
+    set(${idx_var}
+        ""
+        PARENT_SCOPE)
+    return()
+  endif()
+  math(EXPR count "${short_count} - 1")
+
+  foreach(item IN LISTS short long)
+    string(LENGTH "${item}" item_len)
+    if("${item_len}" GREATER "${max_len}")
+      set(max_len ${item_len})
+    endif()
+  endforeach()
+  if("${max_len}" GREATER 0)
+    foreach(len RANGE ${max_len} 1 -1)
+      foreach(index RANGE 0 ${count} 1)
+        list(GET long ${index} opt)
+        string(LENGTH "${opt}" opt_len)
+        if("${opt_len}" EQUAL "${len}")
+          set(out "${out};${opt}")
+          set(idx "${idx};${index}")
+        endif()
+        list(GET short ${index} opt)
+        string(LENGTH "${opt}" opt_len)
+        if("${opt_len}" EQUAL "${len}")
+          set(out "${out};${opt}")
+          set(idx "${idx};${index}")
+        endif()
+      endforeach()
+    endforeach()
+    if(NOT "${out}" STREQUAL "")
+      list(REMOVE_AT out 0)
+      list(REMOVE_AT idx 0)
+    endif()
+  endif()
+  set(${out_var}
+      "${out}"
+      PARENT_SCOPE)
+  set(${idx_var}
+      "${idx}"
+      PARENT_SCOPE)
+endfunction()
+
+#[=======================================================================[.rst:
+_arg_parse_find_arg
+~~~~~~~~~~~~~~~~~~~
+
+.. code-block:: cmake
+
+  _arg_parse_find_arg(<INDEX> <HAS_VALUE> <VALUE> <ARGUMENT> [<LENGTH_SORTED_ARGS> ...])
+
+
+``<INDEX>`` - -1 if element was not found or list is empty
+``<HAS_VALUE>`` - TRUE if value is found false otherwise
+``<VALUE>`` - "" if no value is found or value otherwise
+``<ARGUMENT>`` - argument to parse
+``<ARGN>`` - sorted by length arguments
+#]=======================================================================]
+function(_arg_parse_find_arg index_var has_value_var value_var argument)
+  list(LENGTH ARGN argn_count)
+  set(index -1)
+  set(has_value FALSE)
+  set(val "")
+  if(NOT "${argn_count}" EQUAL "0")
+
+    math(EXPR argn_count "${argn_count} - 1")
+    foreach(argn_index RANGE 0 ${argn_count} 1)
+      list(GET ARGN ${argn_index} item)
+      # check argument
+      if("${item}" STREQUAL "${argument}")
+        set(index "${argn_index}")
+        break()
+      endif()
+      # check --?.+=<value>
+      string(FIND "${argument}" "${item}=" pos_with_equal)
+      if("${pos_with_equal}" EQUAL "0")
+        set(index "${argn_index}")
+        string(LENGTH "${item}=" opt_with_equal_count)
+        set(has_value TRUE)
+        string(SUBSTRING "${argument}" ${opt_with_equal_count} -1 val)
+        break()
+      endif()
+      # check if "\-.<value>"
+      string(LENGTH "${item}" item_count)
+      string(FIND "${argument}" "${item}" pos_no_equal)
+      if(("${item_count}" EQUAL "2") AND ("${pos_no_equal}" EQUAL "0"))
+        set(index "${argn_index}")
+        set(has_value TRUE)
+        string(SUBSTRING "${argument}" 2 -1 val)
+        break()
+      endif()
+    endforeach()
+  endif()
+  set(${index_var}
+      ${index}
+      PARENT_SCOPE)
+  set(${has_value_var}
+      ${has_value}
+      PARENT_SCOPE)
+  set(${value_var}
+      ${val}
+      PARENT_SCOPE)
+endfunction()
+
+function(_arg_is_value out_var text)
+  string(FIND "${text}" "-" pos)
+  if("${pos}" EQUAL "0")
+    set(${out_var}
+        FALSE
+        PARENT_SCOPE)
+  else()
+    set(${out_var}
+        TRUE
+        PARENT_SCOPE)
+  endif()
+endfunction()
+
+macro(_ARG_APPEND_VALUE var val)
+  if(DEFINED ${var})
+    set(${var} "${${var}};${val}")
+  else()
+    set(${var} "${val}")
+  endif()
+endmacro()
+
 #[=======================================================================[.rst:
 _arg_parse
 ~~~~~~~~~~
 
 .. code-block:: cmake
 
-  _arg_parse(<PREFIX> <COMMAND> <ARGS> <USED> <INPUT>)
+  _arg_parse(<PREFIX> <COMMAND> <ARGS> <USED> [<INPUT> ...])
 
 get command output:
 
@@ -618,7 +756,7 @@ get command output:
 ``<ARGS>`` - argument to pass
 ``<INPUT>`` - input
 #]=======================================================================]
-function(_arg_parse prefix command_name command_args used input)
+function(_arg_parse prefix command_name command_args used)
   # get parse values
   _arg_get_command_output(command_output "${command_name}" "${command_args}")
   _arg_output_split(command_usage command_positional command_optional
@@ -626,4 +764,111 @@ function(_arg_parse prefix command_name command_args used input)
   # prase arguments
   _arg_optional_parse(opts "${command_optional}")
 
+  foreach(opt_name IN LISTS opts_NAME)
+    unset(${prefix}_${opt_name} PARENT_SCOPE)
+    unset(local_${opt_name})
+  endforeach()
+  sort_by_length(opts_sorted opts_index "${opts_SHORT}" "${opts_LONG}")
+  list(LENGTH opts_sorted opts_sorted_count)
+  if("${opts_sorted}" EQUAL "0")
+    # to do setting values output
+    message(FATAL_ERROR "no option to be parsed")
+    return()
+  endif()
+  math(EXPR opts_sorted_count "${opts_sorted_count} - 1")
+  set(arguments "${ARGN}")
+  set(positionals "")
+  unset(arg_unparsed)
+  while(NOT "${arguments}" STREQUAL "")
+    list(GET arguments 0 argument)
+    list(REMOVE_AT arguments 0)
+    _arg_parse_find_arg(sorted_pos has_val val "${argument}" ${opts_sorted})
+    if("${sorted_pos}" EQUAL -1)
+      _arg_is_value(is_value "${argument}")
+      if(is_value)
+        set(positionals "${positionals};${argument}")
+      else()
+        list(APPEND arg_unparsed "${argument}")
+      endif()
+      continue()
+    endif()
+    list(GET opts_index ${sorted_pos} opt_index)
+    list(GET opts_NAME ${opt_index} opt_name)
+    list(GET opts_NARG ${opt_index} opt_narg)
+    list(GET opts_CHOICES ${opt_index} opt_choices)
+    if(has_val)
+      set(can_have_equal "+;?;*;1")
+      list(FIND can_have_equal "${opt_narg}" can_have_equal_pos)
+      if("${opt_narg}" EQUAL "0")
+        message(
+          WARNING "Optional argument '${argument}' should not have a value")
+      elseif("${can_have_equal_pos}" EQUAL "-1")
+        message(
+          FATAL_ERROR
+            "Optional argument should not be passed by '=' in argument '${argument}' of type ${opt_narg}"
+        )
+      endif()
+      message("=${val}")
+      _arg_append_value(local_${opt_name} "${val}")
+    elseif(NOT "${opt_narg}" STREQUAL "0")
+      if("${opt_narg}" STREQUAL "?" OR "${opt_narg}" STREQUAL "*")
+        if("${arguments}" STREQUAL "")
+          # no arguments left
+          continue()
+        endif()
+        list(GET arguments 0 argument_value)
+        _arg_is_value(is_value "${argument_value}")
+        if(is_value)
+          list(REMOVE_AT arguments 0)
+          _arg_append_value(local_${opt_name} "${argument_value}")
+        endif()
+      else()
+        set(count "${opt_narg}")
+        if("${opt_narg}" STREQUAL "+")
+          set(count "1")
+        endif()
+        list(LENGTH arguments arguments_count)
+        if("${arguments_count}" < "${count}")
+          message(
+            FATAL_ERROR
+              "argument '${argument}' requires ${count} values but ${arguments_count} is passed"
+          )
+        endif()
+        math(EXPR count "${count} - 1")
+        set(values "")
+        foreach(offset RANGE 0 count)
+          list(GET arguments ${offset} argument_value)
+          _arg_is_value(is_value "${argument_value}")
+          if(NOT is_value)
+            message(
+              FATAL_ERROR
+                "Value is required for argument '${argument}' but '${argument_value}' is found"
+            )
+          endif()
+          set(values "${values};${argument_value}")
+        endforeach()
+        list(REMOVE_AT 0 values)
+        _arg_append_value(local_${opt_name} "${values}")
+      endif()
+    endif()
+  endwhile()
+
+  unset(arg_used)
+  foreach(opt_name IN LISTS opts_NAME)
+    if(DEFINED local_${opt_name})
+      set(${prefix}_${opt_name}
+          "${local_${opt_name}}"
+          PARENT_SCOPE)
+      list(APPEND arg_used "${opt_name}")
+    endif()
+  endforeach()
+  if(DEFINED arg_unparsed)
+    list(APPEND arg_used "UNPARSED_ARGUMENTS")
+    set(${prefix}_UNPARSED_ARGUMENTS
+        "${arg_unparsed}"
+        PARENT_SCOPE)
+  endif()
+  set(${used}
+      "${arg_used}"
+      PARENT_SCOPE)
 endfunction()

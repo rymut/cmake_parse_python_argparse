@@ -42,6 +42,13 @@ Implementation of parser for Python argparse commands arguments, based on help m
 - [x] Bug: Wrong detection of `-nr, --no-remote`
 - [x] Name fallback should always choose long name (if present)
 - [x] Set narg when optional value is flag
+- [ ] Parse positional arguments
+- [ ] Verify choice values
+
+## Limitations
+
+Script can detect usage of: '+', '?', '*', 0, n arguments
+It cannot decetec
 
 ## Format
 
@@ -91,3 +98,21 @@ Scrit can parse custom arguments parsers:
   --id ID [ID ...]
   -s SKIP, --skip SKIP
   -l LIMIT, --limit LIMIT
+
+### Formating variables
+
+Options can be passed as: 
+-v 10
+--verbose 10
+-v=10
+--verbose=10
+  
+If short option is exactly 2 letters long value can be passed directly after option:
+-v10
+
+Value after set value cannot start from with "-".
+
+Setting is fully valid sets none/empty string as argument
+-v=
+--verbose=
+

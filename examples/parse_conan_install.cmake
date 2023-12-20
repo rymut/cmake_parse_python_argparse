@@ -9,6 +9,7 @@ set(CMD_ARGS "install")
 set(CMD_HELP "-h")
 _arg_get_command_output(CMD_STDOUT "${CMD_NAME}" "${CMD_ARGS}" ${CMD_HELP})
 _arg_output_split(USE POS OPT "${CMD_STDOUT}" "${CMD_NAME}" "${CMD_ARGS}")
+#[[
 message("output:")
 foreach(line IN LISTS USE)
   message("USE: '${line}'")
@@ -39,3 +40,10 @@ if(${LEN} GREATER 0)
             "usage: '${ARG_USAGE}', narg: ${ARG_NARG}")
   endforeach()
 endif()
+#]]
+
+_arg_parse(
+  test ${CMD_NAME} "${CMD_ARGS}" ARG_USED
+  "--build=never;-vtrace;-pr:a=default;-pr:h=msvc;-b=libh264;-p:a=test")
+message("used args ${ARG_USED}")
+message("unparsed args: ${test_UNPARSED_ARGUMENTS}")
