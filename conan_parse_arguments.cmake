@@ -720,6 +720,19 @@ function(_arg_parse_find_arg index_var has_value_var value_var argument)
       PARENT_SCOPE)
 endfunction()
 
+#[=======================================================================[.rst:
+_arg_is_value
+~~~~~~~~~~~~~
+
+.. code-block:: cmake
+
+  _arg_is_value(<OUTPUT> <TEXT>)
+
+Check if ``<TEXT>`` is value, value cannot start with `-`
+
+``<OUTPUT>`` - set to TRUE if ``<TEXT>`` can be value, false otherwise
+``<TEXT>`` - text to check
+#]=======================================================================]
 function(_arg_is_value out_var text)
   string(FIND "${text}" "-" pos)
   if("${pos}" EQUAL "0")
@@ -733,6 +746,19 @@ function(_arg_is_value out_var text)
   endif()
 endfunction()
 
+#[=======================================================================[.rst:
+_arg_append_value
+~~~~~~~~~~~~~~~~~
+
+.. code-block:: cmake
+
+  _arg_append_value(<VAR> <VAL>)
+
+Append variable to list ``<VAR>``.
+
+``<VAR>`` - variable name
+``<VAL>`` - value
+#]=======================================================================]
 macro(_ARG_APPEND_VALUE var val)
   if(DEFINED ${var})
     set(${var} "${${var}};${val}")
@@ -747,14 +773,19 @@ _arg_parse
 
 .. code-block:: cmake
 
-  _arg_parse(<PREFIX> <COMMAND> <ARGS> <USED> [<INPUT> ...])
+  _arg_parse(<PREFIX> <COMMAND_NAME> <COMMAND_OPTION> <USED> [<INPUT> ...])
 
 get command output:
 
 ``<PREFIX>`` - where to store stdout stream
-``<COMMAND>`` - command to find
-``<ARGS>`` - argument to pass
+``<COMMAND_NAME>`` - command to find
+``<COMAND_OPTION>`` - argument to pass
+``<USED>`` - used variables
 ``<INPUT>`` - input
+
+Reserved parameter names:
+``<PREFIX>_UNPARSED_ARGUMENTS`` - store argument that were not parsed
+
 #]=======================================================================]
 function(_arg_parse prefix command_name command_args used)
   # get parse values

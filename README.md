@@ -44,11 +44,12 @@ Implementation of parser for Python argparse commands arguments, based on help m
 - [x] Set narg when optional value is flag
 - [ ] Parse positional arguments
 - [ ] Verify choice values
+- [ ] `_arg_is_value` - should check if -3.14 is passed correctly as value
 
 ## Limitations
 
 Script can detect usage of: '+', '?', '*', 0, n arguments
-It cannot decetec
+It cannot detect `action` being used: 'store', 'count' for this reason all values will be added to the list.
 
 ## Format
 
